@@ -91,6 +91,12 @@ class TrainableBasketModel(nn.Module):
 
     @classmethod
     def from_checkpoint(cls, checkpoint, config):
+        import json
+        from pathlib import Path
+        cfg=json.loads(Path(config).read_text())
+        if cfg.get('model_family')=='product_interactions':
+            from .product_interactions import ProductInteractionSimulator
+            return ProductInteractionSimulator.load(checkpoint,config).model
         from .model import BasketSimulator
         reference=BasketSimulator.load(checkpoint,config)
         if not bool(reference.s['separate_category_price']):

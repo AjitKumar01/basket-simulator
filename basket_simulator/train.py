@@ -55,6 +55,8 @@ def fit(model,train,validation,out,maxiter=200,ridge=10.,batch_size=512,threshol
     if (maxcalls is not None and maxcalls<1) or (time_limit is not None and time_limit<=0):
         raise ValueError('Fit budgets must be positive')
     out=Path(out);out.mkdir(parents=True,exist_ok=False)
+    history_size=int(model.config.get('lbfgs_history',10))
+    if not 1<=history_size<=20:raise ValueError('lbfgs_history must be between1 and20')
     parameters=[(n,p) for n,p in model.named_parameters() if p.requires_grad];bounds=model.parameter_bounds()
     if not parameters:raise ValueError('No trainable parameters')
     def vector():return np.concatenate([p.detach().numpy().ravel() for _,p in parameters])
@@ -86,8 +88,9 @@ def fit(model,train,validation,out,maxiter=200,ridge=10.,batch_size=512,threshol
     write_json(out/'protocol.json',{'optimizer':'L-BFGS-B','maxiter':maxiter,'ridge':ridge,
         'maxcalls':maxcalls,'time_limit':time_limit,
         'batch_size':batch_size,'seed':model.config.get('seed'),'stationarity_threshold':threshold,
+        'lbfgs_history':history_size,
         'selection':'maximum validation basket log likelihood, including initialization',
-        'model':'separated-price category chain; fully offered, nonempty distinct-item baskets',
+        'model':model.config.get('model_family','separated-price category chain')+'; fully offered, nonempty distinct-item baskets',
         'train_baskets':len(train[1]),'validation_baskets':len(validation[1]),
         'torch':torch.__version__,'numpy':np.__version__})
     initial=vector();initial_objective,_=objective(initial)
@@ -113,7 +116,7 @@ def fit(model,train,validation,out,maxiter=200,ridge=10.,batch_size=512,threshol
         return objective(v)
     try:
         opt=minimize(limited,initial,jac=True,method='L-BFGS-B',bounds=bounds,callback=callback,
-                     options={'maxiter':maxiter,'maxfun':maxiter*5,'gtol':threshold/10,'ftol':1e-12,'maxls':30})
+                     options={'maxiter':maxiter,'maxfun':maxiter*5,'gtol':threshold/10,'ftol':1e-12,'maxls':30,'maxcor':history_size})
     except FitBudget as exc:
         from types import SimpleNamespace
         opt=SimpleNamespace(x=last_accepted,nit=len(history),nfev=calls,message=str(exc))

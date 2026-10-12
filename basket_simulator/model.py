@@ -55,8 +55,12 @@ class BasketSimulator:
     @classmethod
     def load(cls,checkpoint,config):
         import torch
+        cfg=json.loads(Path(config).read_text())
+        if cfg.get('model_family')=='product_interactions':
+            from .product_interactions import ProductInteractionSimulator
+            return ProductInteractionSimulator.load(checkpoint,config)
         state=torch.load(checkpoint,map_location='cpu',weights_only=True)
-        return cls({k:v.detach().numpy() for k,v in state.items()},json.loads(Path(config).read_text()))
+        return cls({k:v.detach().numpy() for k,v in state.items()},cfg)
 
     def _stage(self,context):
         if set(context)!={'house','store','week','dlp','disp','mail'}:raise ValueError('Supply context only, no targets')

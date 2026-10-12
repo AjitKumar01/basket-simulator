@@ -1,7 +1,8 @@
 # The current basket model, explained from first principles
 
-This guide includes the **legacy separated-price category-chain model** and the
-applications already evaluated with its saved checkpoints. It is written so you
+This guide explains the **basic category-chain model**, the optional
+[product-interaction head](#product-interactions-added-in-version-04), and their
+applications. It is written so you
 can understand the model without reading the research diary. Equations describe
 the implemented law, not a proposed future architecture.
 
@@ -147,8 +148,9 @@ without category enumeration or a dense causal category matrix. For 256 categori
 estimate about 0.050 seconds on the local machine. These hand-initialized runtime
 checks do not establish predictive or causal performance on a large real catalogue.
 Direct household tables still cost O(households times products); uniform category
-width and full availability remain assumptions. R=P in the recommended exact-
-independent-parent pipeline can be more expensive than a small count cap.
+width and full availability remain assumptions. R=P recovers the unrestricted
+independent-product parent. Version0.4 also supports smaller caps during staged
+training with an exactly normalized category-capped parent.
 
 ## 1. What a basket means here
 
@@ -1106,3 +1108,95 @@ The older Version-4 global energy model and its Gaussian/Smolyak pipeline are no
 part of this release. The finite category-chain/ESP law above is the model being
 trained here. A new reader only needs the README, this guide and the files in the
 folder map; historical handoff notes are deliberately excluded.
+## Product interactions added in version 0.4
+
+The basic category chain can link buying dairy to buying cereal, but, after fixing
+category participation, it cannot link a particular milk product to a particular
+cereal product. The optional `fit_product_interactions` head removes this
+factorization. The earlier sections below describe the basic model; this section
+specifies the additional law implemented in `product_interactions.py`.
+
+Each product has two rank-r vectors, A and B. For products j and k in different
+categories, their symmetric interaction is
+
+`W(j,k) = [A(j)·B(k) + B(j)·A(k)] / 2`.
+
+For the category currently being considered, product j receives an additional
+utility equal to its interaction with products already selected, plus interaction
+with **expected future products**. Future expectations come from a frozen
+independent-category parent at the current offered prices. They are predictions,
+not the shopper's observed future basket. Discounting a future complement can
+therefore affect an earlier product. The uncentered factors also allow dependence
+between a specific product and another category's total purchases. Separate
+category links represent category-wide dependence; these are low rank when there
+are more than ten categories.
+
+Write the parent's present-category count probabilities as q_n, its product
+utilities as u, and the new utility shift as d. Reweight count n by
+
+`r_n = q_n * ESP_n(exp(u+d)) / ESP_n(exp(u))`.
+
+The new count probabilities are r_n divided by their sum Z. The new category-entry
+logit is the parent's entry logit plus the category interaction plus log Z. Given
+count n, a subset S has probability proportional to
+`exp(sum_{j in S}(u_j+d_j))`. All local normalizers and fixed-count sampling still
+use ESP dynamic programming. This jointly changes entry, count and composition;
+it does not add correlations after generating an otherwise independent basket.
+
+Each category order defines a normalized sequential joint distribution. Its empty
+basket probability follows its all-empty prefix path, including the future-price
+terms. Condition each order separately on a nonempty basket, then average their
+probabilities with fixed uniform weights. Use all six orders for three categories
+and at most four deterministic/seeded orders for larger catalogues. This is a
+finite order mixture, not a claim of permutation invariance.
+
+Likelihood and generation are exact **for this sequential law**. Future utility is
+a behavioral approximation; it is not exact inference in a global pairwise energy
+model. Its price responses require empirical validation. Training computes all
+observed prefixes with cumulative sums in parallel, so it does not perform a
+separate full-catalogue scan for each category. With fixed ranks/order count,
+ESP/count support, the product head uses polynomial computation and linear-size
+interaction storage above ten categories. Direct shopper preferences remain a
+separate dense storage cost.
+
+Generation draws an order, then category participation, count and the weighted
+subset sequentially. Exact first-present probabilities enforce nonemptiness
+without rejection. Application expectations use whole-basket Monte Carlo; paired
+scenario draws give standard errors for incidence and size changes. These errors
+measure integration noise, not parameter uncertainty or causal validity. Tiny
+catalogues can request enumerated diagnostic expectations explicitly.
+
+Training freezes the preference/count/price parent. If the parent has category
+chain links, the reference expectations use an explicitly recorded independent-
+category projection. Compare the resulting candidate to the **original** parent's
+validation score; retain the original if the new head is worse. A failed final
+active-gradient check stops dependent work. The best predictive checkpoint's
+gradient is reported separately, and no joint optimum is asserted.
+
+The diagnosed synthetic complement failure improved in two fresh worlds:
+cross-category relative response error 0.529→0.231 and 0.669→0.256. The second
+narrowly misses the fixed 0.25 threshold. Mission-world substitution does not
+improve consistently. Reused real development likelihood improved from -3.38330
+to -3.38072, while recommendation and generation results remain mixed. These
+results establish a representational repair and a bounded empirical improvement,
+not a complete digital twin, universal price accuracy or promotion superiority.
+
+For a purchase cap R smaller than the offered width P, the staged preference parent
+uses the exact partition `Z_c = sum_{n=0..R} ESP_n(exp(u_c))` in each category.
+The whole-basket nonempty partition is `product_c Z_c - 1`. Pooled initialization
+fits this constrained support directly; it does not initialize as though forbidden
+baskets were available or remove unsupported observations. R=P reduces to the
+ordinary independent-product law.
+
+Above ten categories, count-only and category-only structural fits supply their
+stationary final states as optimizer warmups, followed by the original joint active
+objective and unchanged gradient threshold. Predictive checkpoint selection and
+the original preference-parent fallback are kept separate. In a 16-category,
+512-product, four-purchase-cap training check, the original structural fit failed
+at gradient0.000475 after350iterations. The block warmup followed by joint fitting
+from the converged preference parent reached gradient0.0000101 in three joint
+iterations. This is a computational/training check on procedural data, not a large
+real-data accuracy result. Its optional product head hurt validation and failed
+its gradient check; it was rejected with that failure preserved. A certified parent
+can be exported when an unused head adds no validation benefit; an uncertified
+head that proposes an improvement cannot be exported.

@@ -16,7 +16,8 @@ class PopulationBasketSimulator:
             raise ValueError('Nonempty matching household/weight vectors required')
         if not np.isfinite(raw).all() or not np.equal(raw,raw.astype(int)).all():
             raise ValueError('Household IDs must be finite integers')
-        ids=raw.astype(int);limit=len(model.s['theta'])
+        ids=raw.astype(int)
+        limit=int(model.config['users']) if model.config.get('model_family')=='product_interactions' else len(model.s['theta'])
         if (ids<=0).any() or (ids>=limit).any() or len(np.unique(ids))!=len(ids):
             raise ValueError('Prior requires unique known household IDs, excluding row0')
         if not np.isfinite(weights).all() or (weights<=0).any():raise ValueError('Positive finite weights required')
