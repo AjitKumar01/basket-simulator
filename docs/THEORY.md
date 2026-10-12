@@ -501,6 +501,90 @@ The model supports all 15 nonempty within-category subsets when \(P=R=4\).
 If a different run uses \(R<P\), larger within-category sets have probability zero.
 Do not compare likelihoods on different basket supports without checking this.
 
+## Count mean, unknown shoppers and the latest checks
+
+The optional count intercept \(\nu_c\) changes each count weight to
+
+\[
+ A_{c,n}=\log E_n(\exp u_c)+\nu_c(n-1)
+          -\rho_c n(n-1)/2.
+\]
+
+Increasing \(\nu_c\) encourages additional distinct products. Increasing
+\(\rho_c\) suppresses the upper tail more strongly. Learning both separates count
+mean from curvature; setting \(\nu_c=0\) exactly recovers the earlier law. The
+same modification enters reference count weights and the coupled category inclusive
+value. It is an unpenalized count intercept, like the existing count/category
+intercepts. `learn_count_offset` enables it. The optional `fit_response` stage
+keeps shopper/store/calendar preferences fixed while fitting count and price
+channels. Its small-category cross-link reparameterization preserves the initial
+probability law; it is currently limited to at most ten categories. Then
+`fit_category_scale` adds the existing category scale \(\operatorname{softplus}(\tau_c)\)
+to that same response block. This lets a category translate its inclusive value
+into participation with a learned sensitivity rather than a fixed sensitivity of
+one. Product tastes remain fixed. This stage requires the response optimizer's
+final active-block stationarity check to pass. Selection still uses observed
+validation basket likelihood, with the parent available.
+
+For an unknown shopper, averaging preferences first is generally wrong because
+probabilities are nonlinear functions of those preferences. The explicit
+`PopulationBasketSimulator` instead defines
+
+\[
+ p_{\rm new}(S\mid z)=\sum_{h\in\mathcal H}w_h p(S\mid h,z),
+ \qquad w_h>0,\quad\sum_h w_h=1.
+\]
+
+Its prior uses only training trip frequencies and a fixed representative sample.
+Likelihood is a log-sum-exp over components; expected incidence is their weighted
+average. Generation draws one shopper component, then the complete basket. Thus it
+preserves dependencies within a basket. Completion scores candidate baskets under
+the mixture. Price scenarios keep prior weights fixed; changing who visits the
+shop remains outside this conditional model. This prior can improve aggregate
+calibration without learning the unknown individual's tastes.
+
+The later ERIM comparison fitted the released basic recipe from scratch and froze
+it before scoring: LL improved from -3.4029 to -3.3833, with nearly level recall.
+These targets had been inspected by an older model. A deliberate whole-shopper
+holdout exposed zero-effect size bias: repaired mean1.234 vs real1.281. The finite
+population mixture predicts1.278; sampled size TV drops from .0326 to .0096.
+
+The initial new synthetic world exposed a count-shape failure: size TV .0684 and
+predicted mean2.283 vs observed2.365. The validation-selected count/price followup
+gives TV .0087 and mean2.371. It initially passes five of six price-response
+checks. Paired discount category-response error is29.4% of the zero-response error,
+exceeding the unchanged25% target. An exact decomposition attributes about99% of
+that error to constituent single-action errors adding up; the nonadditive
+interaction contributes about1%. Allowing the existing category scale to learn
+reduces that failed error to24.3%, passing all six checks. This world is development
+evidence because its errors informed the repair; earlier failures are preserved.
+
+The complete recipe was then frozen before fitting a second world with independent
+parameters and sample seeds. It uses only observed baskets and prices for training
+and validation selection; oracle response truth is consulted after selection.
+
+| Fresh-world check | Independent parent | Calibrated chain |
+|---|---:|---:|
+| Basket LL | -5.6081 | -5.2514 |
+| Recall@5 | .5986 | .5990 |
+| Generated size TV | .0521 | .0139 |
+| Within-category multiple rate | .1676 | .2556 |
+
+The true multiple rate is .2570. Predicted mean size is2.3792 versus observed2.3783.
+All six single/paired response checks pass: relative mean absolute errors are
+16.8–23.2% of the error from predicting zero response, with slopes .91–1.16.
+The fixed pass rule requires relative error at most25% and slope between .75 and1.25.
+The independent parent fails all six. This supports the repair within one stress-world
+family; broader synthetic families and real causal promotion accuracy remain open.
+All final stages pass their local gradient checks. Some validation-selected best
+checkpoints fail those checks, and no joint optimum is claimed. The new response
+stages have not yet been refitted/evaluated on fresh real retail targets.
+
+Category computation now scales polynomially, but dense preferences still require
+households times products storage. Ten optimizer history pairs cost about20times
+the parameter bytes. `memory_budget_mib` can reject an oversized dense fit early;
+it does not turn dense training into a sparse or validated factorized full-shop fit.
+
 ## 8. How fitting works
 
 For each observed basket the model evaluates the complete probability above. Training
@@ -515,7 +599,7 @@ L(\vartheta)=-\frac1{n_{\rm train}}\sum_i\log P_\vartheta(S_i\mid z_i)
 
 The current chain uses ridge strength 10. Active nonintercept parameters are penalized;
 the product intercepts \(\lambda_j\), category intercepts \(\kappa_c\) and
-\(\rho_c\) are excluded from this ridge term. Inactive legacy parameters are not
+\(\rho_c\) and optional count intercepts \(\nu_c\) are excluded from this ridge term. Inactive legacy parameters are not
 new sources of learned behavior. Full-batch calculations are chunked for memory,
 and L-BFGS-B optimizes with bounds, including nonnegative physical price slopes
 and count scales. Some later runners use fixed parameter-block scaling to help

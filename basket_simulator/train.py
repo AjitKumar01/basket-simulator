@@ -70,7 +70,7 @@ def fit(model,train,validation,out,maxiter=200,ridge=10.,batch_size=512,threshol
             loss=-model.log_probability(subset(ctx,slice(k,k+batch_size)),y[k:k+batch_size]).sum()/N
             if not torch.isfinite(loss):raise RuntimeError('Nonfinite likelihood')
             loss.backward();value+=float(loss.detach())
-        penalized=[p.square().sum() for n,p in parameters if n not in ('lam','kappa','rho')]
+        penalized=[p.square().sum() for n,p in parameters if n not in ('lam','kappa','rho','count_offset')]
         if penalized:
             penalty=ridge*torch.stack(penalized).sum()/(2*N)
             penalty.backward();value+=float(penalty.detach())

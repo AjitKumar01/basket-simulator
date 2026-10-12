@@ -42,6 +42,7 @@ class TrainableBasketModel(nn.Module):
         self.zeta=small(J,store_rank);self.xi=small(stores,store_rank);self.mu=small(J,4)
         self.w_dsp=zero(J);self.w_mlr=zero(J)
         self.rho=nn.Parameter(torch.full((C,),.5,dtype=torch.float64))
+        if config.get('learn_count_offset',False):self.count_offset=zero(C)
         self.choice_price=nn.Parameter(torch.full((J,),.5,dtype=torch.float64))
         self.category_price=nn.Parameter(torch.full((C,P),.5/P,dtype=torch.float64))
         self.count_price_scale=nn.Parameter(torch.full((C,),.5,dtype=torch.float64))
@@ -101,6 +102,7 @@ class TrainableBasketModel(nn.Module):
         cfg['chain_rank']=reference.s['linear_p'].shape[1] if 'linear_p' in reference.s else 0
         cfg['preference_mode']='direct' if 'house_effect' in reference.s else 'factors'
         cfg['learn_inclusive_price']='inclusive_price_weight' in reference.s
+        cfg['learn_count_offset']='count_offset' in reference.s
         cfg['category_anchor']='independent' if bool(reference.s.get('independent_category_anchor',False)) else 'legacy'
         model=cls(cfg)
         # Inactive historical tensors were validated by the reference adapter above.
@@ -142,7 +144,7 @@ class TrainableBasketModel(nn.Module):
         actual=log_esp(u,self.R)
         reference=log_esp(b,self.R)
         n=torch.arange(1,self.R+1,dtype=torch.float64,device=b.device)
-        penalty=self.rho[:,None]*(n*(n-1)/2)
+        penalty=self.rho[:,None]*(n*(n-1)/2)-getattr(self,'count_offset',torch.zeros_like(self.rho))[:,None]*(n-1)
         a0=reference[...,1:]-penalty
         a=a0+self.count_price_scale[None,:,None]*(actual[...,1:]-reference[...,1:])
         iv0=torch.logsumexp(a0,-1)

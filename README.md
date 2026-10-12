@@ -31,7 +31,7 @@ The example is for exercising the software. It is not real retail data, and trai
 
 The recommended pipeline first fits independent-product preferences, selecting household shrinkage from ridge 1/10. It then freezes those preferences and fits within-category count penalties plus category biases and pair links. The coupled ESP category inclusive value is retained; a matched ablation did not favor removing that coupling. The second stage can retain its parent if extra structure worsens validation. This separates preference learning from count/category calibration.
 
-Training prints one JSON progress record per optimizer iteration. `runs/example/` contains `preferences_0/`, `preferences_1/`, `structure/`, `selection.json`, and the selected `best.pt`/`config.json`. Each stage contains:
+Training prints one JSON progress record per optimizer iteration. `runs/example/` contains `preferences_0/`, `preferences_1/`, `structure/`, optional `response/` and `category_calibration/`, `selection.json`, and the selected `best.pt`/`config.json`. Each stage contains:
 
 | File | Meaning |
 |---|---|
@@ -101,6 +101,17 @@ For product j, `dlp = log(price_j / reference_price_j)`. A zero is reference pri
 
 Optional configuration keys include `order`, `chain_rank`, `preference_mode` (`direct` or `factors`), `category_anchor` (`independent` or `legacy`) and `trainable_parameters`. The generic legacy model also exposes taste/store/hidden/cross ranks. Prefer the staged pipeline for the tested direct-preference, baseline-inclusive coupled model; `train.py` remains available for explicitly selected blocks and legacy fits.
 
+Set `learn_count_offset: true` to learn count mean separately from the penalty on larger counts. For the tested price-calibration recipe, add these two keys to the basic configuration:
+
+```json
+"fit_response": true,
+"fit_category_scale": true
+```
+
+The first stage enables the count offset and fits count/price channels with shopper/store/calendar preferences frozen. The second also learns the existing category inclusive-value scale. Each stage selects on validation likelihood and can retain its parent. Category calibration stops if the response optimizer's final stationarity check fails; inspect its saved history before another run. These stages currently support at most 10 categories. They passed six single/paired price-response checks on an independently seeded synthetic world after the recipe was frozen. That is a stress test within one world family, not certification of causal price predictions on real data.
+
+`memory_budget_mib` optionally rejects a dense-preference fit before allocation when its optimizer-memory estimate exceeds that budget. `memory_estimate.json` records the estimate; covariates and autograd workspace need additional memory. At 3,848 household rows and 8,192 products, the preference tables alone need about 255 MB and ten L-BFGS correction pairs about 5.1 GB. Polynomial computation does not eliminate this storage cost.
+
 A prediction context JSON contains exactly `house`, `store`, `week`, `dlp`, `disp`, `mail`, without a basket target or size. The last three fields are C-by-P lists. Training requires targets; synthetic generation does not.
 
 ## Python API
@@ -119,6 +130,20 @@ baskets = simulator.generate(context, draws=100, seed=7)
 
 Or load saved parameters with `BasketSimulator.load(checkpoint_path, config_path)`. The trainable model uses PyTorch automatic differentiation and ESP dynamic programming. Basket likelihood and sampling do not enumerate category patterns or product subsets. Category expectations are exact for up to 10 categories; larger cases use category Monte Carlo with exact within-category expectations and reported standard errors. Price scenarios share category random numbers and report uncertainty in the difference. Use `--mc-draws` and `--seed` to control this integration.
 
+For an unknown shopper, a finite population mixture can average over learned tastes rather than set all shopper effects to zero:
+
+```python
+from basket_simulator import PopulationBasketSimulator
+
+population = PopulationBasketSimulator.from_training(
+    simulator, training_household_ids, representatives=128, seed=7)
+unknown_context = {**context, "house": 0}
+prediction = population.predict(unknown_context)
+baskets = population.generate(unknown_context, draws=100, seed=7)
+```
+
+Use only training IDs/frequencies to build the prior. The mixture supports the same `log_probability`, `recommend` and `what_if` methods. It defines an exact finite mixture; the representative approximation to the broader shopper population is a separate limitation. Save its `households` and `weights` if you need to recreate the same prior. This is an explicit Python API option; the basic CLI's unknown row remains the zero-effect fallback.
+
 Large-category chains use low-rank causal pair links by default (`chain_rank=4` when C>10), and cross-category calculations avoid dense category matrices. With fixed product width/count cap and factor ranks, work grows approximately linearly with category count. The scaling smoke passed through 256 categories/8,192 products. This is a numerical/runtime check, not a fitted full-shop validation. Dense household preferences cost household-count times product-count memory; the generic model also supports factorized preferences when that table is too large. The staged pipeline uses direct preferences and requires R=P to exactly include an independent-product parent.
 
 ## Read the theory and run tests
@@ -136,6 +161,7 @@ basket_simulator/
   trainable.py       differentiable model and exact ESP
   train.py           data validation, fitting, checkpointing and diagnostics
   pipeline.py        preferences first, then count/category corrections
+  population.py      finite shopper mixture for unknown shoppers
   model.py           application probabilities, sampling, ranking and scenarios
   example_data.py    procedural example data generator
   __main__.py        application CLI
@@ -146,3 +172,5 @@ pyproject.toml       installation and dependencies
 ```
 
 No historical research scripts, handoff diaries, raw datasets or fitted checkpoints are included in this model folder. On the reused 28-product ERIM development slice, the repaired staged model improves basket LL from -3.4405 (continued independent parent) to -3.4186, size-distribution TV from 0.0138 to 0.0054, and within-category multiple-product rate from 0.00784 to 0.00277 (observed 0.00260). Recall@5 is essentially level, 0.7082 versus 0.7073. These are a focused warm-start development comparison, not final-test or broad-domain claims. The final structural stage passes its active-block convergence check; predictive checkpoints and a joint optimum remain separately reported. Price effects are observational predictions, not certified causal elasticities. Units, visits, stockouts and dynamics remain outside this model.
+
+A subsequent fit **from scratch** improved ERIM later-period LL from -3.4029 to -3.3833; recall@5 was 0.7034 versus 0.7026. That later period had been inspected by an older model, so it is not an untouched final test. On a whole-shopper holdout, the population mixture corrected the repaired model's predicted mean size from 1.234 to 1.278 (observed 1.281). In a new synthetic development world, count/price calibration reduced size-distribution TV from 0.0684 to 0.0087. The first count/price repair passed five of six price-response checks. Diagnosis traced almost all remaining paired-category error to the individual category responses; fitting the existing category scale then passed all six. With the recipe frozen, a second independently seeded world also passed all six: response errors were 16.8–23.2% of predicting no response, below the fixed 25% threshold. Its generated mean size was 2.379 versus 2.378 observed, and size TV was 0.0139 versus the independent baseline's 0.0521. The new calibration stages have not yet been validated on fresh real data or real causal promotions.

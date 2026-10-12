@@ -1,4 +1,5 @@
-"""Portable inference for the current small-catalogue basket chain."""
+"""Trainable basket chain and scalable basket applications."""
 from .model import BasketSimulator
+from .population import PopulationBasketSimulator
 
-__all__ = ["BasketSimulator"]
+__all__ = ["BasketSimulator", "PopulationBasketSimulator"]

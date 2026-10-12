@@ -75,7 +75,7 @@ class BasketSimulator:
         b=b.reshape(self.C,self.P)+s['w_dsp'].reshape(self.C,self.P)*display+s['w_mlr'].reshape(self.C,self.P)*mail
         u=b-s['choice_price'].reshape(self.C,self.P)*price
         prefix=esp_prefix(u,self.R);e=prefix[:,-1];e0=esp_prefix(b,self.R)[:,-1]
-        n=np.arange(1,self.R+1);penalty=s['rho'][:,None]*(n*(n-1)/2)
+        n=np.arange(1,self.R+1);penalty=s['rho'][:,None]*(n*(n-1)/2)-s.get('count_offset',np.zeros(self.C))[:,None]*(n-1)
         a0=e0[:,1:]-penalty
         a=a0+s['count_price_scale'][:,None]*(e[:,1:]-e0[:,1:])
         count=a-logsumexp(a,axis=1,keepdims=True)

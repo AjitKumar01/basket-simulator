@@ -15,6 +15,65 @@ from .trainable import TrainableBasketModel
 from .train import fit,load_data,write_json
 
 
+def memory_estimate(config):
+    """Conservative dense-preference lower bound, not peak RSS certification."""
+    preference=(int(config['users'])+int(config['stores']))*int(config['C'])*int(config['P'])*8
+    return {'dense_preference_bytes':preference,'lbfgs_history_bytes_10_corrections':20*preference,
+            'parameter_gradient_work_and_history_lower_bound_bytes':24*preference,
+            'scope':'Excludes covariates, ESP/autograd workspace and other coefficients'}
+
+
+def response_start(parent):
+    """Freeze preferences and expose count/price blocks with a lossless migration.
+
+    The tested response stage uses a dense cross-category coordinate system for
+    small catalogues. Large-catalogue price fitting needs its own validation.
+    """
+    if parent.C>10:raise ValueError('Full response-stage fitting is validated only for C<=10; use explicit low-rank blocks for larger catalogues')
+    blocks=['rho','kappa','choice_price','count_price_scale','category_price','cross_p','count_offset']
+    blocks+=['linear_p','linear_q'] if hasattr(parent,'linear_p') else ['V']
+    if not hasattr(parent,'independent_category_anchor'):blocks.append('inclusive_price_weight')
+    cfg={**parent.config,'cross_rank':parent.C,'learn_count_offset':True,'learn_inclusive_price':True,
+         'independent_only':False,'trainable_parameters':blocks}
+    model=TrainableBasketModel(cfg)
+    state={k:v for k,v in parent.state_dict().items() if k not in ('cross_p','cross_q')}
+    model.load_state_dict(state,strict=False)
+    with torch.no_grad():
+        model.cross_p.copy_(parent.cross_p@parent.cross_q.T)
+        model.cross_q.copy_(torch.eye(parent.C,dtype=torch.float64))
+        if not hasattr(parent,'inclusive_price_weight'):model.inclusive_price_weight.zero_()
+    return model
+
+
+def fit_response(parent,train,validation,out,maxiter=200,maxcalls=200,time_limit=300.,batch_size=512):
+    model=response_start(parent)
+    with torch.no_grad():
+        ctx,y=validation;c={k:v[:128] for k,v in ctx.items()}
+        np.testing.assert_allclose(model.log_probability(c,y[:128]),parent.log_probability(c,y[:128]),atol=1e-10)
+    result=fit(model,train,validation,out,maxiter=maxiter,maxcalls=maxcalls,time_limit=time_limit,
+               batch_size=batch_size,ridge=10.)
+    return model,result
+
+
+def category_scale_start(parent):
+    """Add the existing category inclusive-value scale to a frozen response block."""
+    cfg={**parent.config,'trainable_parameters':list(dict.fromkeys(
+        [*parent.config['trainable_parameters'],'tau']))}
+    model=TrainableBasketModel(cfg)
+    model.load_state_dict(parent.state_dict())
+    return model
+
+
+def fit_category_scale(parent,train,validation,out,maxiter=200,maxcalls=200,time_limit=300.,batch_size=512):
+    model=category_scale_start(parent)
+    with torch.no_grad():
+        ctx,y=validation;c={k:v[:128] for k,v in ctx.items()}
+        np.testing.assert_allclose(model.log_probability(c,y[:128]),parent.log_probability(c,y[:128]),atol=1e-10)
+    result=fit(model,train,validation,out,maxiter=maxiter,maxcalls=maxcalls,time_limit=time_limit,
+               batch_size=batch_size,ridge=10.)
+    return model,result
+
+
 def independent_start(config,member,seed=0):
     if config['R']!=config['P']:raise ValueError('Exact independent nesting requires R=P')
     cfg={**config,'preference_mode':'direct','category_anchor':config.get('category_anchor','legacy'),
@@ -40,7 +99,16 @@ def independent_start(config,member,seed=0):
 
 def staged_fit(config,train,validation,out,ridges=(1.,10.),seed=0,maxiter=200,
                maxcalls=200,time_limit=300.,batch_size=512):
+    if config.get('fit_category_scale',False) and not config.get('fit_response',False):
+        raise ValueError('fit_category_scale requires fit_response')
+    estimate=memory_estimate(config)
+    budget=config.get('memory_budget_mib')
+    if budget is not None:
+        if not np.isfinite(budget) or budget<=0:raise ValueError('Positive memory_budget_mib required')
+        if estimate['parameter_gradient_work_and_history_lower_bound_bytes']>budget*2**20:
+            raise ValueError('Dense-preference optimizer lower bound exceeds memory_budget_mib; reduce cohort/catalogue or use a validated factor/sparse fitting route')
     out=Path(out);out.mkdir(parents=True,exist_ok=False)
+    write_json(out/'memory_estimate.json',estimate)
     if not ridges or any(r<0 for r in ridges):raise ValueError('Nonnegative ridge choices required')
     records=[];selected=None;best=-np.inf
     for i,ridge in enumerate(ridges):
@@ -52,17 +120,31 @@ def staged_fit(config,train,validation,out,ridges=(1.,10.),seed=0,maxiter=200,
         if row['best_validation_ll']>best:
             best=row['best_validation_ll'];selected=model
     parameters=['rho','kappa','linear_p','linear_q'] if hasattr(selected,'linear_p') else ['rho','kappa','V']
+    if hasattr(selected,'count_offset'):parameters.append('count_offset')
     cfg={**selected.config,'independent_only':False,'trainable_parameters':parameters}
     structure=TrainableBasketModel(cfg,seed)
     structure.load_state_dict(selected.state_dict())
     correction=fit(structure,train,validation,out/'structure',maxiter=maxiter,ridge=10.,
                    batch_size=batch_size,maxcalls=maxcalls,time_limit=time_limit)
-    for name in ('best.pt','config.json'):shutil.copy2(out/'structure'/name,out/name)
+    response=None;category_calibration=None;selected_path=out/'structure'
+    if config.get('fit_response',False):
+        structure,response=fit_response(structure,train,validation,out/'response',maxiter=maxiter,
+            maxcalls=maxcalls,time_limit=time_limit,batch_size=batch_size)
+        selected_path=out/'response'
+    if config.get('fit_category_scale',False):
+        if not response['final_stationarity_passed']:
+            write_json(out/'stopped.json',{'stage':'response','decision':'Category calibration stopped: inspect response fit/history before another fit.'})
+            raise RuntimeError('Response final stationarity failed; category calibration was not launched')
+        structure,category_calibration=fit_category_scale(structure,train,validation,out/'category_calibration',
+            maxiter=maxiter,maxcalls=maxcalls,time_limit=time_limit,batch_size=batch_size)
+        selected_path=out/'category_calibration'
+    for name in ('best.pt','config.json'):shutil.copy2(selected_path/name,out/name)
     result={'preferences':records,'selected_preference_validation_ll':best,'structure':correction,
             'structure_validation_ll_gain':correction['best_validation_ll']-best,
             'structural_parent_retained':correction['best_iteration']==0,
             'stationarity_scope':'Stage-specific active parameters. No joint optimum or causal certificate.',
-            'model':'Direct household/product preferences then ESP count/category-pair corrections'}
+            'model':'Direct household/product preferences then ESP count/category-pair corrections',
+            'response':response,'category_calibration':category_calibration,'selected_stage':selected_path.name}
     write_json(out/'selection.json',result)
     return structure,result
 
