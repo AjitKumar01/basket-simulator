@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "basket-simulator"
+version = "0.1.0"
+description = "Trainable category-chain basket model with exact within-category subset probabilities"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["numpy==2.3.5", "scipy==1.16.3", "torch==2.9.1"]
+
+[project.scripts]
+basket-sim = "basket_simulator.__main__:main"
+basket-train = "basket_simulator.train:main"
+
+[tool.setuptools.packages.find]
+include = ["basket_simulator*"]
