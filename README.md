@@ -20,16 +20,18 @@ Generate a small procedural example dataset and fit from random initialization:
 
 ```bash
 python -m basket_simulator.example_data --out data/example
-python -m basket_simulator.train \
+python -m basket_simulator.pipeline \
   --train data/example/train.npz \
   --validation data/example/validation.npz \
   --config data/example/config.json \
-  --out runs/example --seed 0 --maxiter 50
+  --out runs/example --seed 0 --maxiter 50 --maxcalls 100
 ```
 
 The example is for exercising the software. It is not real retail data, and training on it does not establish causal robustness. The output directory must be new; choose a different directory for another run.
 
-Training prints one JSON progress record per optimizer iteration. `runs/example/` contains:
+The recommended pipeline first fits independent-product preferences, selecting household shrinkage from ridge 1/10. It then freezes those preferences and fits within-category count penalties plus category biases and pair links. The coupled ESP category inclusive value is retained; a matched ablation did not favor removing that coupling. The second stage can retain its parent if extra structure worsens validation. This separates preference learning from count/category calibration.
+
+Training prints one JSON progress record per optimizer iteration. `runs/example/` contains `preferences_0/`, `preferences_1/`, `structure/`, `selection.json`, and the selected `best.pt`/`config.json`. Each stage contains:
 
 | File | Meaning |
 |---|---|
@@ -39,9 +41,11 @@ Training prints one JSON progress record per optimizer iteration. `runs/example/
 | `config.json` | Model dimensions and settings |
 | `fit.json` | Training loss, validation scores, stopping reason and stationarity checks |
 | `history.json` | Iteration-level validation scores and timing |
-| `protocol.json`, `input_manifest.json` | Fit settings, data hashes and source hashes |
+| `protocol.json` | Stage fit settings and selection rule |
 
-**A saved checkpoint is not automatically a converged fit.** Check the best and final projected-gradient results in `fit.json`. Predictive selection and optimization stationarity are reported separately. Continue from parameter values with `--init-checkpoint runs/example/best.pt --config runs/example/config.json --out runs/continued`; this is a warm start, not restoration of optimizer history.
+The training CLI also records input-data and source hashes in the root `input_manifest.json`.
+
+**A saved checkpoint is not automatically a converged fit.** Check the best and final projected-gradient results in `fit.json`. Predictive selection and optimization stationarity are reported separately. The reported stationarity applies to each stage's active parameters, not a joint optimum. For an explicit single-stage or warm-start fit use `python -m basket_simulator.train` with `--init-checkpoint`; that restores parameter values, not optimizer history. The unrestricted joint refit did not improve the strongest baseline in the repair experiment and is not the recommended fitting route.
 
 ## Use the model you just trained
 
@@ -95,26 +99,27 @@ Use a matching JSON configuration:
 
 For product j, `dlp = log(price_j / reference_price_j)`. A zero is reference price, not a free product. Reference prices must remain fixed under interventions. Choose an appropriate chronological validation split and construct price/promotion features without target leakage. The package consumes prepared arrays; it does not infer prices, availability, category mappings or causal identification from arbitrary transaction CSVs.
 
-Optional configuration keys: `taste_rank` (4), `store_rank` (2), `hidden` (8), `cross_rank` (min(C,4)) and `order` (category index permutation). Defaults match the current research architecture.
+Optional configuration keys include `order`, `chain_rank`, `preference_mode` (`direct` or `factors`), `category_anchor` (`independent` or `legacy`) and `trainable_parameters`. The generic legacy model also exposes taste/store/hidden/cross ranks. Prefer the staged pipeline for the tested direct-preference, baseline-inclusive coupled model; `train.py` remains available for explicitly selected blocks and legacy fits.
 
 A prediction context JSON contains exactly `house`, `store`, `week`, `dlp`, `disp`, `mail`, without a basket target or size. The last three fields are C-by-P lists. Training requires targets; synthetic generation does not.
 
 ## Python API
 
 ```python
-from basket_simulator.trainable import TrainableBasketModel
-from basket_simulator.train import fit, load_data
+from basket_simulator.pipeline import staged_fit
+from basket_simulator.train import load_data
 from basket_simulator import BasketSimulator
 
-model = TrainableBasketModel(config, seed=0)
-result = fit(model, load_data(train_path, config),
-             load_data(validation_path, config), "runs/custom")
+model, result = staged_fit(config, load_data(train_path, config),
+                           load_data(validation_path, config), "runs/custom", seed=0)
 simulator = model.reference()  # selected best parameters after fitting
 prediction = simulator.predict(context)
 baskets = simulator.generate(context, draws=100, seed=7)
 ```
 
-Or load saved parameters with `BasketSimulator.load(checkpoint_path, config_path)`. The trainable model uses PyTorch automatic differentiation and exact ESP dynamic programming. Application marginals use exact enumeration and currently support at most 10 categories and 10 products per category. Larger models need a scalable inference strategy; this release does not claim whole-store scalability.
+Or load saved parameters with `BasketSimulator.load(checkpoint_path, config_path)`. The trainable model uses PyTorch automatic differentiation and ESP dynamic programming. Basket likelihood and sampling do not enumerate category patterns or product subsets. Category expectations are exact for up to 10 categories; larger cases use category Monte Carlo with exact within-category expectations and reported standard errors. Price scenarios share category random numbers and report uncertainty in the difference. Use `--mc-draws` and `--seed` to control this integration.
+
+Large-category chains use low-rank causal pair links by default (`chain_rank=4` when C>10), and cross-category calculations avoid dense category matrices. With fixed product width/count cap and factor ranks, work grows approximately linearly with category count. The scaling smoke passed through 256 categories/8,192 products. This is a numerical/runtime check, not a fitted full-shop validation. Dense household preferences cost household-count times product-count memory; the generic model also supports factorized preferences when that table is too large. The staged pipeline uses direct preferences and requires R=P to exactly include an independent-product parent.
 
 ## Read the theory and run tests
 
@@ -130,6 +135,7 @@ python -m unittest discover -s tests -v
 basket_simulator/
   trainable.py       differentiable model and exact ESP
   train.py           data validation, fitting, checkpointing and diagnostics
+  pipeline.py        preferences first, then count/category corrections
   model.py           application probabilities, sampling, ranking and scenarios
   example_data.py    procedural example data generator
   __main__.py        application CLI
@@ -139,4 +145,4 @@ docs/THEORY.md       complete plain-language theory
 pyproject.toml       installation and dependencies
 ```
 
-No historical research scripts, handoff diaries, raw datasets or fitted checkpoints are included in this model folder. Historical real-data results concern a 28-product ERIM projection: independent products leads recommendation, while the chain improves some basket-generation metrics. Current research fits still fail some convergence checks. Price effects are observational predictions, not certified causal elasticities. Units, visits, stockouts and dynamics remain outside this model.
+No historical research scripts, handoff diaries, raw datasets or fitted checkpoints are included in this model folder. On the reused 28-product ERIM development slice, the repaired staged model improves basket LL from -3.4405 (continued independent parent) to -3.4186, size-distribution TV from 0.0138 to 0.0054, and within-category multiple-product rate from 0.00784 to 0.00277 (observed 0.00260). Recall@5 is essentially level, 0.7082 versus 0.7073. These are a focused warm-start development comparison, not final-test or broad-domain claims. The final structural stage passes its active-block convergence check; predictive checkpoints and a joint optimum remain separately reported. Price effects are observational predictions, not certified causal elasticities. Units, visits, stockouts and dynamics remain outside this model.

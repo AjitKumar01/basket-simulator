@@ -1,6 +1,6 @@
 # The current basket model, explained from first principles
 
-This guide describes the **current separated-price category-chain model** and the
+This guide includes the **legacy separated-price category-chain model** and the
 applications already evaluated with its saved checkpoints. It is written so you
 can understand the model without reading the research diary. Equations describe
 the implemented law, not a proposed future architecture.
@@ -31,6 +31,124 @@ yet establish an accurate causal price simulator or a complete shop digital twin
 13. [What the completed results mean](#13-what-the-completed-results-mean)
 14. [From basket simulator to shop twin](#14-from-basket-simulator-to-shop-twin)
 15. [Code, inputs and reproducibility](#15-code-inputs-and-reproducibility)
+
+## The repaired model and recommended fitting route
+
+The current recommended pipeline preserves a strong product-preference model and
+adds a small, separately fitted basket-structure correction. A matched ablation
+showed that removing count/category coupling was not needed for the gain; the
+selected model retains the coupled inclusive value.
+
+Its reference preference is
+
+\[
+b_j=\lambda_j+H_{hj}+S_{sj}+f(t)^\top\mu_j
+    +w_j^D D_j+w_j^M M_j,\qquad u_j=b_j-v_jd_j,\quad v_j\ge0.
+\]
+
+Here H and S are direct household/product and store/product effects, with shrinkage
+selected on validation. The older four-dimensional taste model remains an option,
+but is not the preference representation in the successful repair benchmark.
+
+For the selected coupled model, category appeal is the penalized nonempty subset weight:
+
+\[
+I_c=\log\sum_{n=1}^{P}\exp\{\log E_n(u_c)-\rho_c n(n-1)/2\}.
+\]
+
+In the recommended structural stage,
+
+\[
+\eta_c=I_c+\kappa_c+\sum_{d<c}V_{cd}x_d,
+\quad P(x_c=1\mid x_{<c},z)=\sigma(\eta_c).
+\]
+
+Within a present category,
+
+\[
+A_c(n)=\log E_n(u_c)-\rho_c n(n-1)/2,
+\quad P(N_c=n\mid x_c=1,z)=\operatorname{softmax}_n A_c(n),
+\]
+
+and a subset of that count has weight exp(sum of its item utilities), normalized
+by E_n. The final law is the nonempty-conditioned category chain times these
+conditional count/subset laws. Only category intercepts, causal pair coefficients
+and rho are fitted in the structural stage; product/price coefficients stay fixed.
+
+This architecture contains the independent-product baseline exactly: at rho=0,
+kappa=0 and V=0, category probability is Z_c^+/(1+Z_c^+), with
+Z_c^+=sum E_n(u_c), and the conditional subset law is exp(sum u)/Z_c^+.
+Multiplying categories and their subsets cancels each Z_c^+, giving the ordinary
+independent Bernoulli basket law conditioned nonempty. This identity requires R=P.
+It was verified against every saved validation basket, not assumed from matching
+marginals. Added structure can therefore start from the baseline and retain it
+if validation worsens.
+
+An optional unpenalized anchor uses log(sum E_n(u_c)) for category appeal, so rho
+only changes the conditional count law. This option also improved on the baseline,
+but a matched control slightly favored the original coupled version in likelihood
+and size TV. Therefore uncoupling is not established as the cause of the repair.
+The supported changes are preference capacity/shrinkage and fitting structure
+separately while retaining the learned nuisance coefficients.
+
+Training is staged: fit independent preferences with ridge selection, freeze them,
+then fit structural corrections with the coupled inclusive value. An unrestricted joint refit was tried and dropped
+because it worsened validation for the strong baseline. The hierarchy is not a
+replacement for sufficient household preference information or sensible shrinkage.
+
+On the ERIM development validation, the repaired model scores -3.4186 versus its
+continued independent parent -3.4405 in basket LL. Size TV is 0.0054 versus 0.0138,
+and within-category multiple-product rate is 0.00277 versus 0.00784 (real 0.00260).
+Recall@5 is 0.7073 versus 0.7082. The LL gain's separate household/store-period
+cluster SEs are 0.00172/0.00229. Validation was reused; nuisance parameters were
+warm-started; two generation replicas were used. This is promising development
+evidence, not a fresh final evaluation. Final structural-block stationarity passed;
+selected predictive stationarity and a joint optimum are not thereby certified.
+
+The fuller parameterization described below remains implemented for legacy
+checkpoints and explicit experiments. The recommended model is the simpler law
+above; it fixes its extra count-price, category-scale, hidden and cross blocks
+rather than fitting every supported parameter simultaneously.
+
+### Scaling: what is exact and what is estimated
+
+Training and basket likelihood were already polynomial. The old application layer
+introduced exponential work by listing all category patterns and product subsets.
+The revised application implementation uses ESP prefix/suffix dynamic programs and
+samples categories sequentially, conditioned on eventual nonemptiness.
+
+When no earlier category has appeared, let q_c^0 be the category's probability on
+the all-absent prefix, and Q_c the probability that at least one category appears
+from c onward on that prefix. The conditioned first-presence probability is
+q_c^0/Q_c. Q_c is computed backwards in log space by
+Q_c=q_c^0+(1-q_c^0)Q_{c+1}. After a category appears, use the ordinary chain
+probabilities. This is exact and requires no rejection, even when nonempty baskets
+are extremely rare. Within-category counts and subsets are sampled with ESP
+suffix probabilities; product subsets are never listed.
+
+For larger category counts, causal pair links use
+V_cd=a_c^T b_d for d<c. Their contribution is a_c^T sum_{d<c} b_d x_d,
+computed through a running prefix. Cross-category context effects are also
+multiplied as low-rank factors without constructing a dense C-by-C matrix.
+At fixed ranks, product width and count cap, this work is linear in C. Dense links
+remain a compatibility option for small catalogues.
+
+Exact category marginalization of a general nonlinear chain still needs a sum over
+patterns. Small C<=10 uses that sum. Large C uses exact ancestral category draws
+and exact conditional product expectations; this is Rao-Blackwellized Monte Carlo,
+with reported standard errors. Price differences use common random category draws
+and report paired difference errors. Exact sampling is not the same as exact
+marginal expectation. Increasing integration draws reduces Monte Carlo error,
+not parameter uncertainty or causal confounding.
+
+Numerical scaling checks reached 256 categories and 8,192 products (32 per category),
+without category enumeration or a dense causal category matrix. For 256 categories,
+256 whole-basket samples took about 0.086 seconds and a 4,096-draw category-marginal
+estimate about 0.050 seconds on the local machine. These hand-initialized runtime
+checks do not establish predictive or causal performance on a large real catalogue.
+Direct household tables still cost O(households times products); uniform category
+width and full availability remain assumptions. R=P in the recommended exact-
+independent-parent pipeline can be more expensive than a small count cap.
 
 ## 1. What a basket means here
 
@@ -196,8 +314,8 @@ E_n(w_1,\ldots,w_k)=E_n(w_1,\ldots,w_{k-1})
 
 starts from \(E_0=1\) and impossible positive counts having weight zero. It costs
 roughly products times supported counts, rather than all \(2^P\) subsets, and is
-implemented in log space. The portable small-catalogue adapter enumerates subsets
-instead, making an independent reference calculation of the same law.
+implemented in log space. The current application code also uses ESP prefix/suffix dynamic programming.
+Exhaustive subset tables remain only as a deliberately bounded tiny-model diagnostic.
 
 Multiple products from the same category receive the size penalty
 
@@ -327,7 +445,7 @@ P_{\rm chain}(x\mid z)=
 \prod_c\sigma(\eta_c)^{x_c}\{1-\sigma(\eta_c)\}^{1-x_c}.
 \]
 
-There are \(2^7=128\) patterns in the current case, so exact enumeration for
+There are \(2^7=128\) patterns in the historical case, so exact enumeration for
 category marginals is inexpensive. The chain law is normalized for any category
 count, but this particular exact marginal enumeration grows exponentially with \(C\).
 Large catalogues need a different integration strategy or a different factorization.
@@ -414,9 +532,11 @@ below that bound is ignored. The maximum remaining projected gradient must be at
 \(2\times10^{-4}\) under the recorded checks. An optimizer message saying it stopped
 does not replace this check.
 
-Current selected chain checkpoints fail that convergence criterion. The strongest
-independent-product predictive baseline also fails it under its finite budget; some
-more strongly regularized baseline fits pass. SHOPPER stationarity is uncertified.
+The historical selected chain checkpoints fail that convergence criterion. In the
+repair experiment, the final independent preference fit and final structural fit
+pass for their respective active parameters. Their validation-selected checkpoints
+do not pass. This is stage-specific stationarity, not certification of a joint
+optimum. SHOPPER stationarity remains uncertified.
 This does not invalidate the numerical inference code or erase measured predictive
 scores. It does limit claims that differences reflect well-optimized model classes,
 and leaves parameter-based price responses less settled.
@@ -438,9 +558,8 @@ For a fixed context:
 3. Sample a distinct subset of that size using its utility-based ESP distribution.
 4. Join the category subsets to obtain the whole basket.
 
-Equivalently, the application adapter combines steps 2 and 3 into a table of all
-supported nonempty within-category subsets. It samples from that table for present
-categories. This gives exactly the same law as sampling count and subset separately.
+The current adapter implements these steps directly through a conditioned chain
+and ESP suffix tables. It does not build a table of every possible product subset.
 
 The research ESP method can sample a subset without enumerating it. For a remaining
 pool \(A\), when exactly \(k\) items remain to be picked, the probability of including
@@ -799,9 +918,10 @@ commands.
 
 | File | Responsibility |
 |---|---|
-| `basket_simulator/trainable.py` | Differentiable separated-price model; ESP dynamic program; full basket likelihood |
+| `basket_simulator/trainable.py` | Differentiable legacy and anchored models; ESP; full basket likelihood and batched exact sampling |
+| `basket_simulator/pipeline.py` | Recommended preference-first, count/category structure-second fitting |
 | `basket_simulator/train.py` | Prepared-data validation, bounded full-batch L-BFGS-B, ridge, validation selection, checkpointing and projected-gradient diagnostics |
-| `basket_simulator/model.py` | Same law through independent small-catalogue reference enumeration; predictions, generation, ranking and scenarios |
+| `basket_simulator/model.py` | ESP and direct chain sampling; exact small-C or uncertainty-reported large-C predictions, ranking and scenarios |
 | `basket_simulator/example_data.py` | Independent procedural software example; no fitted model used to generate targets |
 | `basket_simulator/__main__.py` | Application CLI and JSON I/O |
 | `tests/` | Exhaustive probability checks, numerical gradients, generation checks and end-to-end fitting |

@@ -48,11 +48,15 @@ def gradient_norm(vector,gradient,bounds):
     return float(abs(g).max())
 
 
-def fit(model,train,validation,out,maxiter=200,ridge=10.,batch_size=512,threshold=2e-4):
+def fit(model,train,validation,out,maxiter=200,ridge=10.,batch_size=512,threshold=2e-4,
+        maxcalls=None,time_limit=None):
     """Write best/final states and diagnostics. Existing run directories are rejected."""
     if maxiter<1 or ridge<0 or batch_size<1 or threshold<=0:raise ValueError('Invalid fit settings')
+    if (maxcalls is not None and maxcalls<1) or (time_limit is not None and time_limit<=0):
+        raise ValueError('Fit budgets must be positive')
     out=Path(out);out.mkdir(parents=True,exist_ok=False)
-    parameters=list(model.named_parameters());bounds=model.parameter_bounds()
+    parameters=[(n,p) for n,p in model.named_parameters() if p.requires_grad];bounds=model.parameter_bounds()
+    if not parameters:raise ValueError('No trainable parameters')
     def vector():return np.concatenate([p.detach().numpy().ravel() for _,p in parameters])
     def assign(v):
         offset=0
@@ -66,8 +70,10 @@ def fit(model,train,validation,out,maxiter=200,ridge=10.,batch_size=512,threshol
             loss=-model.log_probability(subset(ctx,slice(k,k+batch_size)),y[k:k+batch_size]).sum()/N
             if not torch.isfinite(loss):raise RuntimeError('Nonfinite likelihood')
             loss.backward();value+=float(loss.detach())
-        penalty=ridge*sum(p.square().sum() for n,p in parameters if n not in ('lam','kappa','rho'))/(2*N)
-        penalty.backward();value+=float(penalty.detach())
+        penalized=[p.square().sum() for n,p in parameters if n not in ('lam','kappa','rho')]
+        if penalized:
+            penalty=ridge*torch.stack(penalized).sum()/(2*N)
+            penalty.backward();value+=float(penalty.detach())
         gradient=np.concatenate([p.grad.detach().numpy().ravel() for _,p in parameters])
         if not np.isfinite(gradient).all():raise RuntimeError('Nonfinite gradient')
         return value,gradient
@@ -78,6 +84,7 @@ def fit(model,train,validation,out,maxiter=200,ridge=10.,batch_size=512,threshol
                                  for k in range(0,len(y),batch_size)]).mean())
     write_json(out/'config.json',model.config)
     write_json(out/'protocol.json',{'optimizer':'L-BFGS-B','maxiter':maxiter,'ridge':ridge,
+        'maxcalls':maxcalls,'time_limit':time_limit,
         'batch_size':batch_size,'seed':model.config.get('seed'),'stationarity_threshold':threshold,
         'selection':'maximum validation basket log likelihood, including initialization',
         'model':'separated-price category chain; fully offered, nonempty distinct-item baskets',
@@ -86,7 +93,10 @@ def fit(model,train,validation,out,maxiter=200,ridge=10.,batch_size=512,threshol
     initial=vector();initial_objective,_=objective(initial)
     best={'validation_ll':score(validation),'iteration':0};history=[];start=time.monotonic()
     torch.save(model.state_dict(),out/'best.pt')
+    last_accepted=initial.copy();calls=0
     def callback(v):
+        nonlocal last_accepted
+        last_accepted=v.copy()
         assign(v);vl=score(validation)
         row={'iteration':len(history)+1,'validation_ll':vl,'seconds':time.monotonic()-start}
         history.append(row);write_json(out/'history.json',history)
@@ -94,8 +104,19 @@ def fit(model,train,validation,out,maxiter=200,ridge=10.,batch_size=512,threshol
         if vl>best['validation_ll']:
             best.update(validation_ll=vl,iteration=row['iteration']);torch.save(model.state_dict(),out/'best.pt')
         print(json.dumps(row),flush=True)
-    opt=minimize(objective,initial,jac=True,method='L-BFGS-B',bounds=bounds,callback=callback,
-                 options={'maxiter':maxiter,'maxfun':maxiter*5,'gtol':threshold/10,'ftol':1e-12,'maxls':30})
+    class FitBudget(Exception):pass
+    def limited(v):
+        nonlocal calls
+        if maxcalls is not None and calls>=maxcalls:raise FitBudget('objective_call_limit')
+        if time_limit is not None and time.monotonic()-start>=time_limit:raise FitBudget('time_limit')
+        calls+=1
+        return objective(v)
+    try:
+        opt=minimize(limited,initial,jac=True,method='L-BFGS-B',bounds=bounds,callback=callback,
+                     options={'maxiter':maxiter,'maxfun':maxiter*5,'gtol':threshold/10,'ftol':1e-12,'maxls':30})
+    except FitBudget as exc:
+        from types import SimpleNamespace
+        opt=SimpleNamespace(x=last_accepted,nit=len(history),nfev=calls,message=str(exc))
     final_objective,final_grad=objective(opt.x)
     final_stationarity=gradient_norm(opt.x,final_grad,bounds)
     torch.save(model.state_dict(),out/'final.pt')
