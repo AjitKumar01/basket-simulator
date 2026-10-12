@@ -578,7 +578,63 @@ The independent parent fails all six. This supports the repair within one stress
 family; broader synthetic families and real causal promotion accuracy remain open.
 All final stages pass their local gradient checks. Some validation-selected best
 checkpoints fail those checks, and no joint optimum is claimed. The new response
-stages have not yet been refitted/evaluated on fresh real retail targets.
+stages were subsequently tried on the existing real development slice. They did
+not improve it, as detailed below; fresh real retail and causal evaluation remain open.
+
+### Real transfer and campaign audit
+
+The full response block was warm-started from the from-scratch basic ERIM model.
+All 250 validation iterates were worse than the parent, so predictive selection
+kept that parent. The final projected gradient was .00377, above .0002; category
+calibration and dependent scoring were stopped. The biggest gradient was in the
+cross-category price block. Training has only three three-product category events
+and no four-product events, so a separately learned count mean and curvature have
+much weaker support here than in the synthetic world. These are measured diagnostics;
+they do not establish a unique explanation for every real price error.
+
+A smaller, separately recorded fit froze cross-category links and count parameters,
+allowing only product switching, direct/inclusive-value category price channels,
+category bias and category scale to learn. It converged, but every validation
+iterate still lost to its parent. This distinguishes an optimization failure from
+a predictive failure: more optimizer iterations cannot make the already converged
+restricted fit improve its validation score. The extra calibration was rejected.
+
+For a fairer comparison, the independent baseline also recalibrated its product
+price slopes with household/store/calendar preferences fixed. Validation selected
+that baseline before scoring the reused later period.
+
+| Real later-period metric | Recalibrated independent | Retained basic chain |
+|---|---:|---:|
+| Basket LL | -3.3955 | -3.3833 |
+| Recall@5 | .7039 | .7026 |
+| Size TV | .0113 | .0148 |
+| Within-category multiple rate | .00619 | .00220 |
+
+The observed multiple rate is .00203. LL gain is .01221, with household-cluster
+SE .00185 and store-period-cluster SE .00273. Both restricted final fits pass their
+active-stage stationarity check; their selected best checkpoints fail it separately.
+This is repeatedly inspected development data, not a fresh causal or final test.
+
+The campaign adapter covers all 2,975 assigned households and all four Cottonelle
+products. Original documentation distinguishes three sources: actual promoted
+shelf prices, weekly aggregate pre-coupon sales averages, and weekly household
+shopping summaries. Only the first gives a shelf offer, and only for promotion
+rows. In the campaign it covers about40.5% of tissue purchase records; no store-week
+has offers for all four Cottonelle products. Trip-specific shopping records begin
+at the campaign's final week. The weekly summaries cover earlier activity but
+contain no store/day/trip. Annual flags indicate card usage, not complete panel
+participation. A missing purchase is therefore not always verified non-purchase.
+
+Pooled coupon-arm households recorded .435 more Cottonelle units per assigned
+household than controls; a within-cell household sampling interval is [.089,.787].
+The pre-campaign contrast was already .096. A conservative five-triplet cell
+sign-flip sensitivity gives p=.0625; this is also its minimum attainable two-sided
+p. Neither calculation proves the undocumented randomization unit. These are
+recorded arm associations, not a pure-price verdict. Conditioning on campaign
+nonempty baskets can also select shoppers after treatment. Coupon receipt,
+attention and redemption cannot simply be replaced by the realized average
+redeemed discount. An exposure/visit and quantity layer plus suitable treatment
+data are needed before testing shop-wide promotion margin.
 
 Category computation now scales polynomially, but dense preferences still require
 households times products storage. Ten optimizer history pairs cost about20times
