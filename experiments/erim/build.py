@@ -31,8 +31,9 @@ def category_from_config(specification: dict, base: Path) -> BasketCategorySourc
         purchase=resolve(base, sources["purchase"]),
         shopping=tuple(resolve(base, value) for value in shopping_values),
         products=resolve(base, sources["products"]),
-        retail=(None if sources.get("retail") is None
-                else resolve(base, sources["retail"])),
+        retail=(
+            None if sources.get("retail") is None else resolve(base, sources["retail"])
+        ),
     )
 
 
@@ -55,8 +56,7 @@ def verify_download_manifest(categories, manifest_path: Path) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", type=Path,
-                        required=True)
+    parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path)
     args = parser.parse_args()
     config_path = args.config.resolve()
@@ -65,13 +65,17 @@ def main() -> None:
         raise ValueError("ERIM basket configuration requires schema_version=1")
     categories = tuple(
         category_from_config(specification, config_path.parent)
-        for specification in configuration["categories"])
+        for specification in configuration["categories"]
+    )
     source_manifest = resolve(config_path.parent, configuration["source_manifest"])
     source_hashes = verify_download_manifest(categories, source_manifest)
     policy = BasketBuildPolicy(**configuration.get("policy", {}))
     dataset = ERIMMultiCategoryBasketAdapter(categories, policy).load()
-    output = (args.output_dir.resolve() if args.output_dir else
-              resolve(config_path.parent, configuration["output_dir"]))
+    output = (
+        args.output_dir.resolve()
+        if args.output_dir
+        else resolve(config_path.parent, configuration["output_dir"])
+    )
     output.mkdir(parents=True, exist_ok=False)
     outputs = {
         "transactions": output / "transactions.parquet",
@@ -96,7 +100,8 @@ def main() -> None:
         "audit": dataset.audit,
         "outputs": {
             name: {
-                "path": str(path), "bytes": path.stat().st_size,
+                "path": str(path),
+                "bytes": path.stat().st_size,
                 "sha256": file_sha256(path),
             }
             for name, path in outputs.items()

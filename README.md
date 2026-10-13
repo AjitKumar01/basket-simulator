@@ -127,7 +127,15 @@ tests/               mathematical, data-contract, and workflow checks
 ```bash
 python -m pytest tests -q
 python -m experiments check --out runs/math-check
+python -m black --check basket_simulator experiments tests
 ```
+
+The source uses four-space indentation and one statement per line. Core model,
+optimizer, sampler and evaluation functions explain their inputs and probability
+calculations in docstrings. For reading the code, start with
+`experiments/pipeline.py` (workflow), `basket_simulator/trainable.py` (basket law),
+and `experiments/evaluate.py` (comparison metrics). The neural comparator is
+explained in the [experiment guide](docs/EXPERIMENTS.md#what-the-neural-baseline-does).
 
 The portable benchmark consolidates current sources using the large-catalogue fitting recipe. It does **not** exactly replay earlier ERIM/synthetic fits that used different calibration stages and baseline variants. Origins and adaptations are recorded in `experiments/source_origins.json`.
 

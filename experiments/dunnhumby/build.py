@@ -17,19 +17,20 @@ session = day (prices constant)        session = day (chain) or (store, day)
 price = daily median transacted price  weekly *modal* transacted unit price
 
 transaction_data carries no price column, only sales_value and three discount
-columns, so every price here is a reconstruction.  See the block comment in main()
-and 10_price_definition_audit.py for the evidence behind each one; briefly,
+columns, so every price here is a reconstruction. See the block comment in main()
+for the retained definitions and inherited audit context; briefly,
 base_price is the regular posted shelf price, loyalty_price is what a card holder
 faces, paid_price is what the shopper actually handed over, and unit_price is
 whichever of the first two the model consumes (NF_PRICE_BASIS, default "loyalty").
 
-Outputs (parquet, in ../data):
+Outputs (parquet, in the requested --out directory):
     tx.parquet          cleaned lines, with base / loyalty / paid prices
     trips.parquet       one row per (household, day) trip; spend and spend_paid
     price_week.parquet  product x week chain panel: price, base_price,
                         promo_depth, n_tx, n_store
     price_store_week.parquet  product x store x week panel: price, base_price, n_tx
 """
+
 import json
 import os
 import numpy as np
@@ -37,6 +38,7 @@ import pandas as pd
 
 from pathlib import Path
 import argparse
+
 RAW = None
 OUT = None
 
@@ -49,16 +51,19 @@ def modal_price(tx, keys, col, order):
     """Most frequent cent value of `col` within each `keys` cell, aligned to `order`.
 
     Vectorised: a lambda over 2.5M rows takes minutes.  Ties are broken toward the
-    lower price -- on a tie the shelf offered both, and the lower one is the one a
-    shopper could actually obtain -- which also makes the result deterministic.
+    lower price, which makes the proxy deterministic. This tie rule does not
+    establish which shelf price was actually available to an individual shopper.
     """
     c = tx[keys].copy()
     c["cents"] = np.round(tx[col].to_numpy() * 100).astype(np.int64)
     g = c.groupby(keys + ["cents"], sort=False).size().rename("n").reset_index()
     g = g.sort_values(["n", "cents"], ascending=[True, False], kind="mergesort")
     g = g.drop_duplicates(keys, keep="last")
-    return (g.set_index(keys).cents / 100.0).reindex(
-        pd.MultiIndex.from_frame(order[keys])).to_numpy()
+    return (
+        (g.set_index(keys).cents / 100.0)
+        .reindex(pd.MultiIndex.from_frame(order[keys]))
+        .to_numpy()
+    )
 
 
 def main():
@@ -66,9 +71,14 @@ def main():
     tx = pd.read_csv(
         RAW + "transaction_data.csv",
         dtype={
-            "household_key": np.int32, "BASKET_ID": np.int64, "DAY": np.int16,
-            "PRODUCT_ID": np.int32, "QUANTITY": np.int32, "STORE_ID": np.int32,
-            "TRANS_TIME": np.int16, "WEEK_NO": np.int16,
+            "household_key": np.int32,
+            "BASKET_ID": np.int64,
+            "DAY": np.int16,
+            "PRODUCT_ID": np.int32,
+            "QUANTITY": np.int32,
+            "STORE_ID": np.int32,
+            "TRANS_TIME": np.int16,
+            "WEEK_NO": np.int16,
         },
     )
     n0 = len(tx)
@@ -103,7 +113,9 @@ def main():
     nonpositive = (tx.QUANTITY <= 0) | (tx.SALES_VALUE <= 0)
     n_nonpositive = int(nonpositive.sum())
     tx = tx[~nonpositive]
-    tx["base_price"] = (tx.SALES_VALUE - tx.RETAIL_DISC - tx.COUPON_MATCH_DISC) / tx.QUANTITY
+    tx["base_price"] = (
+        tx.SALES_VALUE - tx.RETAIL_DISC - tx.COUPON_MATCH_DISC
+    ) / tx.QUANTITY
     tx["loyalty_price"] = (tx.SALES_VALUE - tx.COUPON_MATCH_DISC) / tx.QUANTITY
     tx["paid_price"] = (tx.SALES_VALUE + tx.COUPON_DISC) / tx.QUANTITY
     tx["paid_value"] = tx.SALES_VALUE + tx.COUPON_DISC
@@ -127,12 +139,18 @@ def main():
     # retail_disc +$3.99, and $0.51 with +$0.26) yield a base price *half* the amount
     # paid, which then enters the panel as a 50% price cut that never happened.  Four
     # further lines are float noise at ~1e-16, hence the threshold rather than > 0.
-    anom = (tx.RETAIL_DISC > 1e-9) | (tx.COUPON_DISC > 1e-9) | (tx.COUPON_MATCH_DISC > 1e-9)
-    bad = ((tx.QUANTITY > 30) | (tx.unit_price > 100) | (tx.unit_price < 0.05) | anom)
-    log(f"dropping {n_nonpositive + int(bad.sum()):,} of {n0:,} lines: "
+    anom = (
+        (tx.RETAIL_DISC > 1e-9)
+        | (tx.COUPON_DISC > 1e-9)
+        | (tx.COUPON_MATCH_DISC > 1e-9)
+    )
+    bad = (tx.QUANTITY > 30) | (tx.unit_price > 100) | (tx.unit_price < 0.05) | anom
+    log(
+        f"dropping {n_nonpositive + int(bad.sum()):,} of {n0:,} lines: "
         f"{n_nonpositive:,} nonpositive quantity/sales; {int(bad.sum()):,} bulk, "
         f"extreme-price, or sign-anomalous lines "
-        f"[{int(anom.sum())} sign-anomalous]")
+        f"[{int(anom.sum())} sign-anomalous]"
+    )
     tx = tx[~bad].copy()
 
     # ------------------------------------------------------- calendar handling
@@ -147,7 +165,9 @@ def main():
     sunday_res = max(weekend)
     tx["weekday"] = ((tx.DAY % 7) - sunday_res) % 7
     tx["weekday"] = tx.weekday.astype(np.int8)
-    tx["hour"] = (tx.TRANS_TIME // 100 + (tx.TRANS_TIME % 100) / 60.0).astype(np.float32)
+    tx["hour"] = (tx.TRANS_TIME // 100 + (tx.TRANS_TIME % 100) / 60.0).astype(
+        np.float32
+    )
 
     # ------------------------------------------------------------------- trips
     # This legacy summary is a household-day (the paper's definition), not the basket
@@ -173,8 +193,10 @@ def main():
         )
         .reset_index()
     )
-    log(f"trips: {len(trips):,}   households: {trips.household_key.nunique():,}   "
-        f"multi-store trips: {(trips.n_stores > 1).mean():.4f}")
+    log(
+        f"trips: {len(trips):,}   households: {trips.household_key.nunique():,}   "
+        f"multi-store trips: {(trips.n_stores > 1).mean():.4f}"
+    )
 
     # ------------------------------------------------------------ price panels
     # A posted price is a single number, not a central tendency: within a
@@ -199,8 +221,12 @@ def main():
         .agg(n_tx=("unit_price", "size"))
         .reset_index()
     )
-    psw["price"] = modal_price(tx, ["PRODUCT_ID", "STORE_ID", "WEEK_NO"], "unit_price", psw)
-    psw["base_price"] = modal_price(tx, ["PRODUCT_ID", "STORE_ID", "WEEK_NO"], "base_price", psw)
+    psw["price"] = modal_price(
+        tx, ["PRODUCT_ID", "STORE_ID", "WEEK_NO"], "unit_price", psw
+    )
+    psw["base_price"] = modal_price(
+        tx, ["PRODUCT_ID", "STORE_ID", "WEEK_NO"], "base_price", psw
+    )
 
     log(f"chain price cells: {len(pw):,}   store price cells: {len(psw):,}")
 
@@ -209,21 +235,27 @@ def main():
     pw.to_parquet(os.path.join(OUT, "price_week.parquet"), index=False)
     psw.to_parquet(os.path.join(OUT, "price_store_week.parquet"), index=False)
     with open(os.path.join(OUT, "build_meta.json"), "w") as stream:
-        json.dump({
-            "schema_version": 1,
-            "price_basis": basis,
-            "unit_price_source_column": f"{basis}_price",
-        }, stream, indent=2)
+        json.dump(
+            {
+                "schema_version": 1,
+                "price_basis": basis,
+                "unit_price_source_column": f"{basis}_price",
+            },
+            stream,
+            indent=2,
+        )
         stream.write("\n")
     log("wrote tx / trips / price_week / price_store_week parquet")
 
 
 if __name__ == "__main__":
-    parser=argparse.ArgumentParser(description="Build the transaction and lagged-price source tables from Complete Journey CSVs")
-    parser.add_argument('--raw',type=Path,required=True)
-    parser.add_argument('--out',type=Path,required=True)
-    args=parser.parse_args()
-    args.out.mkdir(parents=True,exist_ok=False)
-    RAW=str(args.raw.resolve())+os.sep
-    OUT=str(args.out.resolve())
+    parser = argparse.ArgumentParser(
+        description="Build the transaction and lagged-price source tables from Complete Journey CSVs"
+    )
+    parser.add_argument("--raw", type=Path, required=True)
+    parser.add_argument("--out", type=Path, required=True)
+    args = parser.parse_args()
+    args.out.mkdir(parents=True, exist_ok=False)
+    RAW = str(args.raw.resolve()) + os.sep
+    OUT = str(args.out.resolve())
     main()

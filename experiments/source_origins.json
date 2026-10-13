@@ -4,92 +4,110 @@
     "baselines.py": {
       "original": "artifacts/research_product_interactions_20261013/models.py",
       "original_sha256": "6762061afe79f77ca6778c9f93d8253d87cceab1fc6f656bb8ba110d71b8e609",
-      "packaged_sha256": "cb0a5f55ce9949cfcf0ff24cfcf08dac83a225b3f189a093a40853437e390323"
+      "packaged_sha256": "a9cf9f97dc01778410061bc9e3d3953cd288abb37356de0a06123588bbf5ede7",
+      "pre_readability_sha256": "cb0a5f55ce9949cfcf0ff24cfcf08dac83a225b3f189a093a40853437e390323"
     },
     "common.py": {
       "original": "artifacts/research_large_catalogue_20261013/common.py",
       "original_sha256": "ab31ef55ccf9951b4cacbb744c5c17c24379647fa2e23480d7fafb47657faae4",
-      "packaged_sha256": "55e2d47370602e02a27525908934ea40ce7edc905ec2582203f158770a35eab8"
+      "packaged_sha256": "de67dd36e6db64b8ec8b6233061747dc7924dfdab7794c90fecb2454870e851e",
+      "pre_readability_sha256": "55e2d47370602e02a27525908934ea40ce7edc905ec2582203f158770a35eab8"
     },
     "optimizer.py": {
       "original": "artifacts/research_large_catalogue_20261013/scaled_fit.py",
       "original_sha256": "f6595b6fb6c03b73ab07e27e926534af002e9607934d4fdf9c0a5ef2ac3408b1",
-      "packaged_sha256": "3b874cda6459d7cf0d8dcdc313ac68893ab79c5af610414e51c3f85698340baa"
+      "packaged_sha256": "77660d0b926b378024dde7afb280b227428d0c9ec5cfe30ddaed3dbb4185ccaa",
+      "pre_readability_sha256": "3b874cda6459d7cf0d8dcdc313ac68893ab79c5af610414e51c3f85698340baa"
     },
     "precondition.py": {
       "original": "artifacts/research_large_catalogue_20261013/precondition.py",
       "original_sha256": "f53eb7c2a1a2aae3e13f238439bcb41ab95ff56cace70546b25e29a432e2a7ba",
-      "packaged_sha256": "485e1d22b2e732dc60c1f35c8ecf28bfc2863c8677430194254717ae79fa97bb"
+      "packaged_sha256": "b65e4d7eaefb95ac2cd953d96af75d2f1f3ba1095f8a95fa366ad12022482a5d",
+      "pre_readability_sha256": "485e1d22b2e732dc60c1f35c8ecf28bfc2863c8677430194254717ae79fa97bb"
     },
     "esp.py": {
       "original": "artifacts/research_large_catalogue_20261013/esp_acceleration.py",
       "original_sha256": "69cbbfa8384c8d120fa2ca57bdc98884c328c1718cb8c337f618f822e6c34d65",
-      "packaged_sha256": "c3d22165001b58a9f8acd3b8596f1256f3d2973ee985ea18dae7e24527c039c1"
+      "packaged_sha256": "3256bba1f4874bcb60642c96f0cedfcda45adec5e23c96be680a838392554de7",
+      "pre_readability_sha256": "c3d22165001b58a9f8acd3b8596f1256f3d2973ee985ea18dae7e24527c039c1"
     },
     "preflight.py": {
       "original": "artifacts/research_large_catalogue_20261013/preflight.py",
       "original_sha256": "d1f867fa7ed3df561e715a7fb7a97296dca507dc5c06a7e15dabd5d07d58347b",
-      "packaged_sha256": "6a1dec215d472acf6851ba5595cb0d20354a287489dfcce2a2906b01e15e2448"
+      "packaged_sha256": "c59e151f59a10033c17dd52798c105e99bc991cb20591f40101b48aafa2adbbe",
+      "pre_readability_sha256": "6a1dec215d472acf6851ba5595cb0d20354a287489dfcce2a2906b01e15e2448"
     },
     "pipeline.py": {
       "original": "artifacts/research_large_catalogue_20261013/run2.py",
       "original_sha256": "14659b2ad9edca7367b099d4a95c29259cdedd6e2f6efe204a44b74063f4c527",
-      "packaged_sha256": "7e7942637802a91099097b3e6fa9817f4c20f767c496198c3ccf1c39c700a548"
+      "packaged_sha256": "4be711925d3f14e09b6f4e2e700aaca94528e18e3d3109e661735df09202b832",
+      "pre_readability_sha256": "7e7942637802a91099097b3e6fa9817f4c20f767c496198c3ccf1c39c700a548"
     },
     "evaluate.py": {
       "original": "artifacts/research_large_catalogue_20261013/evaluate.py",
       "original_sha256": "b316ec2afbb8558c0b22dd4719cb6ffeecdf7d667253acff54aac1a97a1fe5f1",
-      "packaged_sha256": "b16ee021300f3cde9885f7451a169eceb9bf6aa778c75f4cb30c5e4d12320c0e"
+      "packaged_sha256": "bc58b2ec35ea794a275350ab5991cc3b13bf5823fe78f1d391d6b98be9380ea4",
+      "pre_readability_sha256": "b16ee021300f3cde9885f7451a169eceb9bf6aa778c75f4cb30c5e4d12320c0e"
     },
     "practical.py": {
       "original": "artifacts/research_large_catalogue_20261013/practical.py",
       "original_sha256": "dc3eac96ce33f6d3a8bfeac1a8856ad921f85c6c5aae939277aef3a2a8377073",
-      "packaged_sha256": "5ac5dfb439050f9e3dafbf950d412662000cd6e771f567aa5e8dd93c012f7ec8"
+      "packaged_sha256": "866eed6bfe03eb26bce6fb5a858c1945c4a9bf262904f8d8af700516595b8d43",
+      "pre_readability_sha256": "5ac5dfb439050f9e3dafbf950d412662000cd6e771f567aa5e8dd93c012f7ec8"
     },
     "dunnhumby/prepare.py": {
       "original": "artifacts/research_large_catalogue_20261013/prepare.py",
       "original_sha256": "fb77d9516dc9f868c36f5f264b95f6bbdd986eba49082599f2c7c41d04ce0436",
-      "packaged_sha256": "5abc950da1913243e7f1a603b3ebe220b3fc6395ee807b7c0e40ab52ca31ffa3"
+      "packaged_sha256": "08081d615d695eec3b74778043eab604389ccf4a1e8a31cd5cc6f543aade75b5",
+      "pre_readability_sha256": "5abc950da1913243e7f1a603b3ebe220b3fc6395ee807b7c0e40ab52ca31ffa3"
     },
     "synthetic/worlds.py": {
       "original": "artifacts/research_common_benchmark_20261013/benchmark.py",
       "original_sha256": "686e91a021c8eba7a80c5d749b316320293d2964edba0a1c6c40fc6b42c05019",
-      "packaged_sha256": "088399d1aea725dcad837089a2428496581ff5e6ed294eccca9c8be614d3a46e"
+      "packaged_sha256": "012334255ebb16c7b5c334f9a6ba683eef7806802159b2ce8383882908361493",
+      "pre_readability_sha256": "088399d1aea725dcad837089a2428496581ff5e6ed294eccca9c8be614d3a46e"
     },
     "synthetic/helpers.py": {
       "original": "artifacts/research_remaining_checks_20261012/confirmation/frozen_helpers.py",
       "original_sha256": "e70f32bb2a05a2e988531c9e862be35caf1d57932b1b0fb55d889d62c1460bbf",
-      "packaged_sha256": "ea66f5990b88990bd7bd2a6a82dc25875aa0c5479ddac0f63b05d370e09e6d1b"
+      "packaged_sha256": "2ec13622aa10f33f519c62f24669b4b1b540648195fefb2bcee4799cdcdb6164",
+      "pre_readability_sha256": "ea66f5990b88990bd7bd2a6a82dc25875aa0c5479ddac0f63b05d370e09e6d1b"
     },
     "synthetic/metrics.py": {
       "original": "artifacts/research_product_interactions_20261013/confirmation_v2.py",
       "original_sha256": "7cc42e5c80ab1253462b8a956b1e717b006ab177e01c931848b60d1d30df0661",
-      "packaged_sha256": "a8fc8141397fc4411a0bff1850ae4e5b57241a2c474b8a1ea7b794d82305ef93"
+      "packaged_sha256": "a24e08f7df3ea1d8aeb9116c6dd58982e4f44a2fceb03b9a73f19ee364a051ea",
+      "pre_readability_sha256": "a8fc8141397fc4411a0bff1850ae4e5b57241a2c474b8a1ea7b794d82305ef93"
     },
     "erim/readers.py": {
       "original": "energy_basket_intelligence/scripts/version4/external_choice_data.py",
       "original_sha256": "dbb407541599bd7dda286c6cf9adcf28271062a3a7b73f25823ac5829f5c6260",
-      "packaged_sha256": "0d9ce62ece9dcb2e31f93c189d6e1d329088a162be20c8253f4d2745096aab75"
+      "packaged_sha256": "8b76f4a1c7ed5d1858fc34bda930c0c65c31b935ee7bdd777dca2a4b37ea4f77",
+      "pre_readability_sha256": "0d9ce62ece9dcb2e31f93c189d6e1d329088a162be20c8253f4d2745096aab75"
     },
     "erim/canonical.py": {
       "original": "energy_basket_intelligence/scripts/version4/external_basket.py",
       "original_sha256": "c10806e5650657fd42f15f531a4851e27a0486dc1bc6eaca94534430ef8ae84c",
-      "packaged_sha256": "a66bb41b1e160df92b074286b3ad651b427b631249b02f36bbf564c2baab91cc"
+      "packaged_sha256": "12695eebf6b24ee718e627e49c7d0e843a39415078a29eedcdcce08d9514d5e3",
+      "pre_readability_sha256": "a66bb41b1e160df92b074286b3ad651b427b631249b02f36bbf564c2baab91cc"
     },
     "erim/build.py": {
       "original": "energy_basket_intelligence/scripts/build_erim_basket_dataset.py",
       "original_sha256": "ad82cb9cd5ae7ff57110e070762b2514671aa3e73fe0f2390c6994190b06b6de",
-      "packaged_sha256": "bb44dab2e60e6ffd70fb55d329635993a7d45e76d6c9f4e5e8d9fffaf0c3ad55"
+      "packaged_sha256": "0625dbc101b68af6427001d133f2a1135fc48da65b1a53ae7d1aa96676067fc6",
+      "pre_readability_sha256": "bb44dab2e60e6ffd70fb55d329635993a7d45e76d6c9f4e5e8d9fffaf0c3ad55"
     },
     "dunnhumby/build.py": {
       "original": "energy_basket_intelligence/scripts/data/01_build_base.py",
       "original_sha256": "b65384397c25835ef35bf86559eb5ebc0b5be67291f0d5bfba9c5f8d68e0eaa3",
-      "packaged_sha256": "6dbcc977932616542ef7ccb2c9806f8c7b946f64cad8f050a00eca290732444d"
+      "packaged_sha256": "1f6c6b7d009dd86423a62adb3cf71bdcc0a59e7153591ee24f3bd9fc88c0528f",
+      "pre_readability_sha256": "6dbcc977932616542ef7ccb2c9806f8c7b946f64cad8f050a00eca290732444d"
     },
     "shopper/native.py": {
       "original": "artifacts/research_real_comparison_20261013/native_shopper.py",
       "original_sha256": "f728612fbe3d5e349c66b0e1e7e4c71630ef52688192ad04f29ab76b066e1106",
-      "packaged_sha256": "a32447f937c11bdb6b00772122fee6aee8cfcd3cd22ac3b215edb3da584c1392"
+      "packaged_sha256": "9e0d4a58fcf1f6deb84144f54c156108be7d10a033cf58270c90493c1ec91e74",
+      "pre_readability_sha256": "a32447f937c11bdb6b00772122fee6aee8cfcd3cd22ac3b215edb3da584c1392"
     }
   },
   "adaptations": [
@@ -97,6 +115,7 @@
     "Dense category links for small catalogues; original low-rank large-catalogue stage remains available.",
     "Small-catalogue sampler compatibility; JSON-safe seeded category triplets.",
     "Continuation retains best-checkpoint scaled gradient metadata; population fit time measured; RSS units portable.",
-    "Optional SHOPPER imports installed upstream code; full-set negatives guarded; native runs remain separate."
+    "Optional SHOPPER imports installed upstream code; full-set negatives guarded; native runs remain separate.",
+    "Readability cleanup from 3d92600: conventional formatting, separate imports, descriptive local identifiers, and explanatory docstrings/comments; model arithmetic, checkpoint keys, signatures and selection rules unchanged."
   ]
 }

@@ -19,6 +19,46 @@ The package runs without neighboring checkouts or old checkpoints. `experiments/
 
 These are concrete implementations, not claims to reproduce every paper's estimator. Benchmark baseline checkpoints load through `experiments.common.load_model` and `experiments.evaluate.Adapter`. The public application CLI loads `basic` and accepted `product` checkpoints.
 
+### What the neural baseline does
+
+`neural` is a **conditional neural autoregressive basket model**. It visits the
+products in the saved catalogue order and predicts a binary purchase decision for
+each one. For example, selecting pasta earlier in the sequence can change the
+later probability of sauce. It uses the same observed shopper, store, calendar,
+price, display and advertising inputs as the other personalized comparators.
+
+For product j, let y_i indicate an earlier selected product and d be the vector
+of log prices relative to training references. Its hidden state and purchase
+logit are:
+
+```text
+hidden_j = sigmoid(sum over i < j of y_i * E_i + d @ Q)
+logit_j  = frozen_parent_preference_j
+           + product_adjustment_j + shopper_adjustment[shopper, j]
+           - own_price_coefficient_j * d_j
+           + cross_price_adjustment_j
+           + dot(hidden_j, O_j)
+```
+
+The hidden state has **16 units**. The direct cross-price map has **rank 8** and
+its diagonal is removed because there is an explicit own-price term. Cross-price
+effects also enter through the hidden state. `E`, `Q` and `O` remain named this way
+in code because they are saved checkpoint parameter names. The prefix excludes
+product j and all later products, so it cannot use their labels to predict j.
+
+Apply a sigmoid to each logit to obtain its conditional purchase probability.
+Multiply the sequential Bernoulli probabilities to obtain the basket law, then
+condition that law on a nonempty basket. Generation samples the same conditioned
+law directly. The independent parent's parameters are frozen; the added neural,
+shopper-adjustment and price parameters are fitted by the common optimizer.
+
+The implementation is [`Neural`](../experiments/common.py), with likelihood and
+sampling inherited from [`BinaryAR`](../experiments/baselines.py). This is a
+NADE-style comparator built for this benchmark, not the native SHOPPER estimator.
+It tests whether a flexible product-level predictor improves over the proposed
+category/count structure. Its learned associations do not by themselves identify
+causal complements or substitution.
+
 ## Training
 
 1. Estimate pooled preferences on training baskets.

@@ -12,7 +12,7 @@ dependencies = ["numpy==2.3.5", "scipy==1.16.3", "torch==2.9.1"]
 
 [project.optional-dependencies]
 research = ["pandas==2.3.3", "pyarrow>=20,<23"]
-dev = ["pytest>=8,<10"]
+dev = ["pytest>=8,<10", "black==25.11.0"]
 
 [project.scripts]
 basket-sim = "basket_simulator.__main__:main"
@@ -29,3 +29,7 @@ experiments = ["source_origins.json"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.black]
+line-length = 88
+target-version = ["py311"]
