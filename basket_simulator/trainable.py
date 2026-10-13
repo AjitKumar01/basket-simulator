@@ -12,11 +12,13 @@ from torch.nn import functional as F
 
 def log_esp(u, maximum):
     """Log elementary symmetric polynomials, including E_0=1; O(P*R)."""
-    terms = [torch.zeros_like(u[...,0])]+[torch.full_like(u[...,0],-1e30) for _ in range(maximum)]
+    terms = torch.cat([torch.zeros_like(u[...,:1]),
+                       torch.full((*u.shape[:-1],maximum),-1e30,dtype=u.dtype,device=u.device)],-1)
     for j in range(u.shape[-1]):
-        terms = [terms[0]]+[torch.logaddexp(terms[n],u[...,j]+terms[n-1])
-                               if n<=j+1 else terms[n] for n in range(1,maximum+1)]
-    return torch.stack(terms,-1)
+        degree=min(maximum,j+1)
+        updated=torch.logaddexp(terms[...,1:degree+1],u[...,j,None]+terms[...,:degree])
+        terms=torch.cat([terms[...,:1],updated,terms[...,degree+1:]],-1)
+    return terms
 
 
 class TrainableBasketModel(nn.Module):

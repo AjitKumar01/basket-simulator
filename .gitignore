@@ -9,4 +9,8 @@ runs/
 data/
 *.pt
 *.log
+.venv-shopper/
+*.parquet
+*.npz
+*.npy
 .DS_Store

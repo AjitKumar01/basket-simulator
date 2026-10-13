@@ -23,6 +23,19 @@ class TrainableTests(unittest.TestCase):
             self.assertAlmostEqual(float(actual[n].detach()),float(torch.logsumexp(values,0).detach()),places=13)
         actual.sum().backward();self.assertTrue(torch.isfinite(u.grad).all())
 
+    def test_batched_capped_esp_gradients_against_enumeration(self):
+        u=torch.tensor([[.3,-.2,.1,.8,-1.],[-3.,2.,-.5,.2,1.]],
+                       dtype=torch.float64,requires_grad=True)
+        actual=log_esp(u,3)
+        expected=torch.stack([torch.logsumexp(torch.stack(
+            [u[:,list(idx)].sum(-1) for idx in itertools.combinations(range(5),n)],-1),-1)
+            for n in range(4)],-1)
+        np.testing.assert_allclose(actual.detach(),expected.detach(),atol=1e-13)
+        weights=torch.tensor([0.,.2,.5,.3],dtype=torch.float64)
+        gradient=torch.autograd.grad((actual*weights).sum(),u,retain_graph=True)[0]
+        oracle=torch.autograd.grad((expected*weights).sum(),u)[0]
+        np.testing.assert_allclose(gradient,oracle,atol=1e-13)
+
     def test_probability_law_and_gradient(self):
         cfg={'C':2,'P':3,'R':3,'users':2,'stores':2,'calendar_support':[1,30]}
         model=TrainableBasketModel(cfg,31)
