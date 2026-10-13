@@ -98,6 +98,8 @@ python -m basket_simulator what-if \
 
 `predict` and `recommend` use the same checkpoint/config/context arguments. A factor of 0.9 means a 10% discount. Product indices match the saved catalogue. Use an accepted `selected/product` checkpoint for the extension; if rejected, use `selected/basic`. Baseline checkpoints use the benchmark adapters, not this application CLI.
 
+For a runnable context-export example, all application commands, Python usage, basket scoring, and unknown-shopper simulation, see [using fitted models](docs/EXPERIMENTS.md#using-fitted-models).
+
 The original model-only training interface remains available for prepared NPZ files:
 
 ```bash

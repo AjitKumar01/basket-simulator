@@ -1074,9 +1074,10 @@ replay every historical continuation, block-scaling strategy or fit budget. Nume
 law equivalence is distinct from replicating historical optimizer trajectories.
 The training input is a prepared NPZ with context arrays plus binary `member` targets.
 All models use a uniform category width and assume full catalogue availability.
-The original raw retail preprocessing and ID mapping must be reproduced by the
-researcher for their own dataset. This package does not infer a reliable price feed
-from purchase-only transactions automatically.
+The current branch includes raw builders and training-only ID/catalogue preparation
+for the supported ERIM and Dunnhumby formats. Follow the README and experiment
+guide for those commands. Other datasets require an explicit adapter to this input
+contract. Transaction-derived price proxies are not a verified shelf-price feed.
 
 Training writes `protocol.json`, `input_manifest.json`, `history.json`, `fit.json`,
 `config.json`, `best.pt`, `latest.pt` and `final.pt`. Best parameters are chosen by

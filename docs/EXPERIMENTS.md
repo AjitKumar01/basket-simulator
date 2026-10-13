@@ -68,6 +68,117 @@ Dunnhumby selects 64 training-supported commodity groups and 16 training-popular
 
 Both loaders use unknown ID 0 and reject empty, nonbinary or unsupported baskets. Quantities are outside the estimand. Dense NPZ data contain `(N,C,P)` context/member arrays. Dunnhumby uses packed membership and shared store/week contexts. Missing products must not be padded as offered items.
 
+## Using fitted models
+
+The application interface supports `basic` and accepted `product` checkpoints.
+Use `basic` if the product extension was rejected. The following examples use an
+existing completed run; no retraining is needed.
+
+### Create the context JSON
+
+This exports one observed test context from either dense ERIM/synthetic arrays or
+the shared-context Dunnhumby layout. It exports only covariates, never the target
+basket. Run from the repository root:
+
+```bash
+BASKET_RUN_DIR=runs/erim python - <<'PY'
+import json
+from pathlib import Path
+from experiments.common import Data, OUT
+
+data = Data('test')
+batch, _ = data.batch(slice(0, 1))
+context = {key: batch[key][0].tolist()
+           for key in ('house', 'store', 'week', 'dlp', 'disp', 'mail')}
+(OUT / 'context.json').write_text(json.dumps(context, indent=2) + '\n')
+PY
+```
+
+For your own contexts, use the prepared `data/id_maps.json` for real household and
+store IDs; unknown IDs map to 0. Preserve the preparation's calendar encoding.
+`dlp[c][p] = log(offered_price / training_reference_price)`; `disp` and `mail` are
+the display and advertising covariates. Arrays must have the saved C-by-P shape.
+Flattened product index `j = c * P + p` refers to `data/config.json`'s `products`
+ordering. `data/reference_price.npy` stores those reference prices. Keep all
+selected products offered, as required by the model's current availability law.
+
+### Application commands
+
+For each command below, append these shared arguments:
+
+```text
+--checkpoint runs/erim/selected/basic/best.pt
+--config runs/erim/selected/basic/config.json
+--context runs/erim/context.json
+```
+
+| Command | Function and output |
+|---|---|
+| `python -m basket_simulator demo` | Independent hand-set illustration; needs no checkpoint or context |
+| `python -m basket_simulator predict` | Product inclusion probabilities, category participation, expected distinct basket size |
+| `python -m basket_simulator generate --draws 100 --seed 7` | 100 nonempty binary C-by-P baskets |
+| `python -m basket_simulator recommend` | Product ranking by inclusion probability, before observing the basket |
+| `python -m basket_simulator recommend --revealed revealed.json` | Rank additions to a supplied binary C-by-P basket, assuming exactly one missing product; scores are joint log probabilities |
+| `python -m basket_simulator what-if --product 0 --factor 0.9` | Before/after predictions and changes for a 10% discount on internal product 0 |
+
+All commands write JSON to stdout; add `--output result.json` to save it. Use
+`--mc-draws 8192 --seed 7` to control numerical integration. The basic model
+integrates category patterns exactly up to ten categories and samples them above
+that size; the product extension uses Monte Carlo prediction. Generation samples
+the fitted basket law directly. Larger draw counts reduce simulation error, not
+uncertainty about fitted parameters or causal identification.
+
+### Python interface and basket scoring
+
+```python
+import json
+import numpy as np
+from basket_simulator import BasketSimulator, PopulationBasketSimulator
+
+run = 'runs/erim'
+model = BasketSimulator.load(f'{run}/selected/basic/best.pt',
+                             f'{run}/selected/basic/config.json')
+context = json.load(open(f'{run}/context.json'))
+prediction = model.predict(context, draws=8192, seed=7)
+baskets = model.generate(context, draws=100, seed=7)
+log_probability = model.log_probability(context, baskets[0])
+ranked_ids, scores = model.recommend(context, draws=8192, seed=7)
+discount = model.what_if(context, product=0, factor=0.9, draws=8192, seed=7)
+
+# Explicit unknown shopper: mix known shoppers using training-trip frequencies.
+with np.load(f'{run}/data/train.npz') as training:
+    population = PopulationBasketSimulator.from_training(
+        model, training['house'], representatives=128, seed=7)
+unknown_context = {**context, 'house': 0}
+population_prediction = population.predict(unknown_context, seed=7)
+population_baskets = population.generate(unknown_context, draws=100, seed=7)
+```
+
+The population wrapper also supports `recommend`, `what_if`, and
+`log_probability`. It supplies an empirical mixture for an explicitly unknown
+shopper, conditional on a retained trip; it does not learn a new shopper or
+predict shop visits. Basic row-0 inference and this mixture are different choices.
+
+To run the full five-panel comparison for baseline checkpoints, use
+`python -m experiments evaluate --run runs/erim`. Baselines are loaded internally
+through `experiments.common.load_model` and `experiments.evaluate.Adapter`;
+passing their checkpoints to `BasketSimulator.load` is unsupported. Promotion
+plan evaluation is in the benchmark, rather than a standalone application CLI.
+
+### Errors and resuming
+
+- A missing `best.pt` means the corresponding selected model is not available;
+  inspect `fit_records.json`, `status.json`, and `training.log` first.
+- A manifest mismatch means code or inputs changed. Create a new run, or diagnose
+  and record an explicit amendment; do not delete the manifest to force reuse.
+- An unresolved fit or `stopped.json` requires inspecting its diagnosis before
+  any continuation. `monitor` is read-only and never resumes failed stages.
+- Invalid context shapes or IDs require fixing the context against the saved
+  mappings. Do not pad missing products into the fully offered catalogue.
+
+Use `python -m experiments --help`, `python -m basket_simulator --help`, or
+`python -m basket_simulator.pipeline --help` for the complete argument lists.
+
 ## Optional SHOPPER
 
 The packaged native myopic SHOPPER adapter uses the upstream sampled loss/Adam and shared observable controls. It is a screening comparator, **not** the paper's Bayesian/thinking-ahead estimator, and remains separate from the common Torch pipeline.
